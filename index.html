@@ -326,6 +326,16 @@
             <h2 id="authTitle" style="font-size: 1.4rem; font-weight: 800; margin-bottom: 8px; color: var(--text-primary);">Iniciar Sesión</h2>
             <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 24px;">Accede para gestionar tu negocio</p>
             
+            <button type="button" class="btn" style="background-color: var(--bg-surface-subtle); color: var(--text-primary); border: 1px solid var(--border-color); margin-bottom: 16px;" onclick="signInWithGoogle()">
+              <i class="fa-brands fa-google" style="color: #ea4335;"></i> Continuar con Google
+            </button>
+
+            <div style="display: flex; align-items: center; margin-bottom: 16px;">
+              <hr style="flex: 1; border: 0; border-top: 1px solid var(--border-color);">
+              <span style="padding: 0 10px; font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">O usa tu correo</span>
+              <hr style="flex: 1; border: 0; border-top: 1px solid var(--border-color);">
+            </div>
+            
             <form id="formAuth" style="text-align: left;">
               <div class="form-group">
                 <label class="form-label">Correo Electrónico</label>
@@ -763,7 +773,7 @@
     /* --------------------------------------------------------------------------
        3. INITIALIZATION & DOM LOADED
        -------------------------------------------------------------------------- */
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       const now = new Date();
       document.getElementById('currentDateStr').textContent = now.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
       initTheme();
@@ -771,6 +781,13 @@
       
       // Populate Business Config form with initial state
       document.getElementById('bizNameInput').value = state.config.businessName;
+
+      // Verificación de Sesión Inicial Estricta
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        document.querySelector('.bottom-nav').style.display = 'none';
+        switchTab('auth');
+      }
 
       // Supabase Auth Listener (Route Protection)
       supabase.auth.onAuthStateChange((event, session) => {
@@ -1167,6 +1184,15 @@
     /* --------------------------------------------------------------------------
        8. SUPABASE AUTH HANDLERS
        -------------------------------------------------------------------------- */
+    async function signInWithGoogle() {
+      try {
+        const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+        if (error) throw error;
+      } catch (error) {
+        alert("Error al conectar con Google: " + error.message);
+      }
+    }
+
     function toggleAuthMode() {
       isLoginMode = !isLoginMode;
       document.getElementById('authTitle').innerText = isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta';
@@ -1199,20 +1225,23 @@
         btn.disabled = true;
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';
         
-        if (isLoginMode) {
-          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-          if (error) { alert("Error al iniciar sesión: " + error.message); }
-        } else {
-          const { data, error } = await supabase.auth.signUp({ email, password });
-          if (error) { alert("Error al crear cuenta: " + error.message); }
-          else { 
-            alert("Cuenta creada exitosamente. Por favor inicia sesión o revisa tu correo."); 
+        try {
+          if (isLoginMode) {
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+          } else {
+            const { error } = await supabase.auth.signUp({ email, password });
+            if (error) throw error;
+            
+            alert("¡Cuenta creada exitosamente!\n\nPor favor revisa tu bandeja de entrada para confirmar tu correo antes de iniciar sesión."); 
             toggleAuthMode(); 
           }
+        } catch (error) {
+          alert("Error: " + error.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta';
         }
-        
-        btn.disabled = false;
-        btn.innerHTML = isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta';
       });
 
       document.getElementById('btnOpenProductModal').addEventListener('click', openNewProductModal);
