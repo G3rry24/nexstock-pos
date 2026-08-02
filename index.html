@@ -13,6 +13,9 @@
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+  <!-- SUPABASE SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <style>
     /* ==========================================================================
        DESIGN SYSTEM & CSS VARIABLES
@@ -171,6 +174,7 @@
        ========================================================================== */
     .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 18px; border-radius: var(--radius-md); font-size: 0.9rem; font-weight: 700; border: none; cursor: pointer; transition: all var(--transition-fast); width: 100%; text-decoration: none; }
     .btn:active { transform: scale(0.96); }
+    .btn:disabled { opacity: 0.7; cursor: not-allowed; }
     .btn-primary { background-color: var(--primary); color: #ffffff; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); }
     .btn-primary:hover { background-color: var(--primary-hover); }
     .btn-success { background-color: var(--accent-success); color: #ffffff; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25); }
@@ -275,6 +279,11 @@
     .btn-anular { background: transparent; border: 1px solid var(--accent-danger); color: var(--accent-danger); padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-top: 6px; transition: all var(--transition-fast); }
     .btn-anular:hover { background-color: var(--accent-danger); color: #fff; }
     .cancelled-badge { display: inline-block; background-color: var(--accent-danger-light); color: var(--accent-danger); font-size: 0.65rem; font-weight: 800; padding: 2px 6px; border-radius: var(--radius-sm); margin-top: 4px; }
+    
+    /* Auth Form Styles */
+    .auth-container { display: flex; flex-direction: column; justify-content: center; height: 100%; padding: 20px; }
+    .auth-card { background-color: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 24px; box-shadow: var(--shadow-lg); text-align: center; }
+    .auth-icon { font-size: 2.5rem; color: var(--primary); margin-bottom: 16px; }
   </style>
 </head>
 <body>
@@ -308,9 +317,40 @@
     <main class="app-body">
 
       <!-- ==========================================
+           VISTA 0: AUTENTICACIÓN (SUPABASE)
+           ========================================== -->
+      <section id="view-auth" class="view-section active">
+        <div class="auth-container">
+          <div class="auth-card">
+            <i class="fa-solid fa-shield-halved auth-icon"></i>
+            <h2 id="authTitle" style="font-size: 1.4rem; font-weight: 800; margin-bottom: 8px; color: var(--text-primary);">Iniciar Sesión</h2>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 24px;">Accede para gestionar tu negocio</p>
+            
+            <form id="formAuth" style="text-align: left;">
+              <div class="form-group">
+                <label class="form-label">Correo Electrónico</label>
+                <input type="email" id="authEmail" class="form-control" placeholder="tu@correo.com" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Contraseña</label>
+                <input type="password" id="authPassword" class="form-control" placeholder="••••••••" required />
+              </div>
+              <button type="submit" class="btn btn-primary" id="btnAuthSubmit" style="margin-top: 16px; padding: 14px;">
+                Iniciar Sesión
+              </button>
+            </form>
+            
+            <button class="btn btn-outline" id="btnAuthToggle" style="margin-top: 16px;" onclick="toggleAuthMode()">
+              ¿No tienes cuenta? Regístrate
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==========================================
            VISTA 1: PANEL (DASHBOARD)
            ========================================== -->
-      <section id="view-dashboard" class="view-section active">
+      <section id="view-dashboard" class="view-section">
         <div class="section-title">
           <span>Resumen General</span>
           <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);" id="currentDateStr">--/--/----</span>
@@ -524,10 +564,14 @@
             </div>
             <div style="display: flex; justify-content: space-between;">
               <span>Versión de la App:</span>
-              <strong style="color: var(--text-primary);">v3.0.0 Pro</strong>
+              <strong style="color: var(--text-primary);">v4.0.0 Cloud</strong>
             </div>
           </div>
         </div>
+        
+        <button class="btn btn-danger" style="margin-top: 10px; width: 100%;" onclick="handleSignOut()">
+          <i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesión
+        </button>
       </section>
 
     </main>
@@ -628,7 +672,7 @@
     <!-- ==========================================
          FIXED BOTTOM NAVIGATION BAR
          ========================================== -->
-    <nav class="bottom-nav">
+    <nav class="bottom-nav" style="display: none;"> <!-- Hidden by default until auth -->
       <button class="nav-item active" onclick="switchTab('dashboard')" id="nav-dashboard">
         <i class="fa-solid fa-chart-pie"></i>
         <span>Panel</span>
@@ -657,24 +701,28 @@
      ========================================================================== -->
   <script>
     /* --------------------------------------------------------------------------
-       1. GLOBAL STATE INITIALIZATION (Simulating DB)
+       0. SUPABASE INIT & AUTH LOGIC
+       -------------------------------------------------------------------------- */
+    const supabaseUrl = 'https://nmnwmzlufhxsmfmurpiq.supabase.co';
+    const supabaseKey = 'sb_publishable_cHWhcjq9qVsl_lE-1FzPOA_Q-R69ryc';
+    const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+    let isLoginMode = true;
+
+    /* --------------------------------------------------------------------------
+       1. GLOBAL STATE INITIALIZATION (Simulating DB - COMPLETELY EMPTIED)
        -------------------------------------------------------------------------- */
     const state = {
       config: {
         businessName: 'NexStock POS',
         businessLogo: null
       },
-      categorias: ['Electrónica', 'Ropa y Calzado', 'Abarrotes'],
-      productos: [
-        { id: 'PROD-101', nombre: 'Smartphone Galaxy S23', categoria: 'Electrónica', stock: 12, minStock: 5, costo: 12000.00, precio: 15999.00, image: null },
-        { id: 'PROD-102', nombre: 'Camiseta de Algodón Básica', categoria: 'Ropa y Calzado', stock: 4, minStock: 10, costo: 80.00, precio: 150.00, image: null },
-        { id: 'PROD-103', nombre: 'Café Grano Tostado 1kg', categoria: 'Abarrotes', stock: 15, minStock: 3, costo: 150.00, precio: 280.00, image: null }
-      ],
+      categorias: [], // EMPTIED FOR SAAS
+      productos: [], // EMPTIED FOR SAAS
       ventas: {
-        articulosVendidos: 0,
-        ingresosTotales: 0.00
+        articulosVendidos: 0, // EMPTIED FOR SAAS
+        ingresosTotales: 0.00 // EMPTIED FOR SAAS
       },
-      historialVentas: [] 
+      historialVentas: [] // EMPTIED FOR SAAS
     };
 
     /* --------------------------------------------------------------------------
@@ -686,7 +734,7 @@
       reader.onload = function(event) {
         const img = new Image();
         img.onload = function() {
-          const MAX_WIDTH = 300; // Small size to save localStorage space
+          const MAX_WIDTH = 300; 
           const MAX_HEIGHT = 300;
           let width = img.width;
           let height = img.height;
@@ -705,7 +753,6 @@
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
           
-          // Return base64 heavily compressed
           callback(canvas.toDataURL('image/jpeg', 0.6));
         }
         img.src = event.target.result;
@@ -720,11 +767,24 @@
       const now = new Date();
       document.getElementById('currentDateStr').textContent = now.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
       initTheme();
-      updateAllUI();
       setupEventListeners();
       
       // Populate Business Config form with initial state
       document.getElementById('bizNameInput').value = state.config.businessName;
+
+      // Supabase Auth Listener (Route Protection)
+      supabase.auth.onAuthStateChange((event, session) => {
+        if (session) {
+          // Logged In -> Show App
+          document.querySelector('.bottom-nav').style.display = 'flex';
+          switchTab('dashboard');
+          updateAllUI(); // Render the empty states or data
+        } else {
+          // Logged Out -> Show Auth
+          document.querySelector('.bottom-nav').style.display = 'none';
+          switchTab('auth');
+        }
+      });
     });
 
     function initTheme() {
@@ -741,7 +801,6 @@
       updateThemeIcon(newTheme);
       showToast(newTheme === 'dark' ? 'Modo Oscuro' : 'Modo Claro', 'fa-moon');
       
-      // Re-render chart to adjust to dark mode colors if needed
       if(document.getElementById('view-dashboard').classList.contains('active')) renderDashboardChart();
     }
 
@@ -763,7 +822,9 @@
       document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active'));
       document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
       document.getElementById(`view-${tabName}`).classList.add('active');
-      document.getElementById(`nav-${tabName}`).classList.add('active');
+      
+      const navBtn = document.getElementById(`nav-${tabName}`);
+      if(navBtn) navBtn.classList.add('active');
 
       if (tabName === 'dashboard') renderDashboard();
       if (tabName === 'products') renderProductsList();
@@ -816,13 +877,11 @@
 
     /* --- VISTA 1: DASHBOARD & CHART --- */
     function renderDashboard() {
-      // Metricas
       const valorTotal = state.productos.reduce((sum, p) => sum + (p.costo * p.stock), 0);
       document.getElementById('dashValorInventario').textContent = formatMXN(valorTotal);
       document.getElementById('dashIngresosTotales').textContent = formatMXN(state.ventas.ingresosTotales);
       document.getElementById('dashArticulosVendidos').textContent = `${state.ventas.articulosVendidos} artículos vendidos`;
 
-      // Alerta Visual Dinámica basada en minStock
       const lowStockProducts = state.productos.filter(p => p.stock <= p.minStock);
       const alertContainer = document.getElementById('lowStockContainer');
 
@@ -843,7 +902,6 @@
     function renderDashboardChart() {
       const chartContainer = document.getElementById('dashboardChart');
       
-      // Calculate top 5 sold products by reading history
       let productSalesMap = {};
       state.historialVentas.forEach(v => {
         if(!v.cancelada) {
@@ -862,7 +920,7 @@
       const maxQty = Math.max(...topProducts.map(p => p.qty));
       
       chartContainer.innerHTML = topProducts.map(p => {
-        const heightPercent = Math.max((p.qty / maxQty) * 100, 10); // min 10% height
+        const heightPercent = Math.max((p.qty / maxQty) * 100, 10);
         return `
           <div class="chart-bar-wrapper">
             <div class="chart-bar" style="height: ${heightPercent}%;" data-val="${p.qty}"></div>
@@ -897,7 +955,6 @@
 
         return `
           <div class="product-card">
-            <!-- Header Layout with Huge Stock -->
             <div style="display: flex; gap: 12px; align-items: flex-start;">
               <div style="width: 75px; height: 75px; border-radius: var(--radius-sm); overflow: hidden; background-color: var(--bg-surface-subtle); flex-shrink: 0; display:flex; justify-content:center; align-items:center; border: 1px solid var(--border-color);">
                  ${imgHtml}
@@ -919,7 +976,6 @@
               <div class="detail-item"><span class="detail-label">Min. Stock</span><span class="detail-val" style="color: var(--text-secondary);">${p.minStock}</span></div>
             </div>
             
-            <!-- Bottom Actions & QR -->
             <div style="display:flex; justify-content: space-between; align-items:center; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color);">
               <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
                 <img src="${qrUrl}" style="width: 44px; height: 44px; border-radius: 4px; padding: 2px; background: #fff; border: 1px solid var(--border-color);" alt="QR">
@@ -1016,16 +1072,13 @@
       const newName = prompt(`Editar el nombre de la categoría "${oldName}":`, oldName);
       if (newName && newName.trim() !== "" && newName.trim() !== oldName) {
           const finalName = newName.trim();
-          // Check if exists
           if (state.categorias.some(c => c.toLowerCase() === finalName.toLowerCase())) {
               alert("Error: Ya existe una categoría con ese nombre.");
               return;
           }
-          // Update in array
           const index = state.categorias.indexOf(oldName);
           if (index !== -1) {
               state.categorias[index] = finalName;
-              // Update all products holding this old category
               state.productos.forEach(p => {
                   if (p.categoria === oldName) p.categoria = finalName;
               });
@@ -1036,26 +1089,24 @@
     }
 
     function deleteCategory(catName) {
-      if(confirm(`¿Estás seguro de eliminar la categoría "${catName}"?\n\nNota: Los productos pertenecientes a esta categoría permanecerán, pero quedarán sin categoría si no la cambias.`)) {
+      if(confirm(`¿Estás seguro de eliminar la categoría "${catName}"?\n\nNota: Los productos de esta categoría quedarán 'Sin Categoría'.`)) {
         const index = state.categorias.indexOf(catName);
         if (index !== -1) {
           state.categorias.splice(index, 1);
-          // Opcional: Reasignar productos a "Sin Categoría" si se desea
           state.productos.forEach(p => {
               if (p.categoria === catName) p.categoria = "Sin Categoría";
           });
-          // Asegurar que "Sin Categoría" exista en el arreglo si se reasignaron
           if(state.productos.some(p => p.categoria === "Sin Categoría") && !state.categorias.includes("Sin Categoría")) {
              state.categorias.push("Sin Categoría");
           }
           updateAllUI();
-          showToast(`Categoría "${catName}" eliminada`, "fa-trash-can");
+          showToast(`Categoría eliminada`, "fa-trash-can");
         }
       }
     }
 
     /* --------------------------------------------------------------------------
-       7. PRODUCT CRUD OPERATIONS (EDIT / DELETE)
+       7. PRODUCT CRUD OPERATIONS
        -------------------------------------------------------------------------- */
     function deleteProduct(productId) {
       if(confirm('¿Seguro que deseas eliminar este producto?')) {
@@ -1081,7 +1132,7 @@
       document.getElementById('prodMinStock').value = p.minStock || 5;
       document.getElementById('prodCost').value = p.costo;
       document.getElementById('prodPrice').value = p.precio;
-      document.getElementById('prodImageBase64').value = p.image || ''; // Keep existing image if not changed
+      document.getElementById('prodImageBase64').value = p.image || ''; 
       
       openModal('modalProduct');
     }
@@ -1114,13 +1165,55 @@
     }
 
     /* --------------------------------------------------------------------------
-       8. EVENT HANDLERS
+       8. SUPABASE AUTH HANDLERS
+       -------------------------------------------------------------------------- */
+    function toggleAuthMode() {
+      isLoginMode = !isLoginMode;
+      document.getElementById('authTitle').innerText = isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta';
+      document.getElementById('btnAuthSubmit').innerText = isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta';
+      document.getElementById('btnAuthToggle').innerText = isLoginMode ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia Sesión';
+    }
+
+    async function handleSignOut() {
+      if(confirm('¿Seguro que deseas cerrar tu sesión?')) {
+        await supabase.auth.signOut();
+      }
+    }
+
+    /* --------------------------------------------------------------------------
+       9. EVENT LISTENERS
        -------------------------------------------------------------------------- */
     function setupEventListeners() {
       document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
       document.getElementById('searchInput').addEventListener('input', renderProductsList);
       document.getElementById('saleProductSelect').addEventListener('change', updateCalculatedSaleTotal);
       document.getElementById('saleQuantityInput').addEventListener('input', updateCalculatedSaleTotal);
+
+      // Auth Submit
+      document.getElementById('formAuth').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('authEmail').value;
+        const password = document.getElementById('authPassword').value;
+        const btn = document.getElementById('btnAuthSubmit');
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';
+        
+        if (isLoginMode) {
+          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) { alert("Error al iniciar sesión: " + error.message); }
+        } else {
+          const { data, error } = await supabase.auth.signUp({ email, password });
+          if (error) { alert("Error al crear cuenta: " + error.message); }
+          else { 
+            alert("Cuenta creada exitosamente. Por favor inicia sesión o revisa tu correo."); 
+            toggleAuthMode(); 
+          }
+        }
+        
+        btn.disabled = false;
+        btn.innerHTML = isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta';
+      });
 
       document.getElementById('btnOpenProductModal').addEventListener('click', openNewProductModal);
       document.getElementById('btnOpenCategoryModal').addEventListener('click', () => {
@@ -1140,7 +1233,6 @@
         }
       });
 
-      // Product Submit Handler with Image Processing
       document.getElementById('formAddProduct').addEventListener('submit', (e) => {
         e.preventDefault();
         const fileInput = document.getElementById('prodImageUpload');
@@ -1171,17 +1263,14 @@
         if (editId) {
           const index = state.productos.findIndex(p => p.id === editId);
           if(index !== -1) { state.productos[index] = { ...state.productos[index], ...data }; }
-          // NATIVE ALERT AS REQUESTED for confirmation
           alert(`✅ ¡Éxito! El producto "${data.nombre}" ha sido actualizado correctamente.`);
         } else {
           state.productos.unshift({ id: `PROD-${Math.floor(1000 + Math.random() * 9000)}`, ...data });
-          // NATIVE ALERT AS REQUESTED for confirmation
           alert(`✅ ¡Éxito! El producto "${data.nombre}" se agregó correctamente al inventario.`);
         }
         updateAllUI(); closeModal('modalProduct');
       }
 
-      // Sale Submit
       document.getElementById('formRegistrarVenta').addEventListener('submit', (e) => {
         e.preventDefault();
         const product = state.productos.find(p => p.id === document.getElementById('saleProductSelect').value);
@@ -1207,7 +1296,6 @@
         }
       });
 
-      // Stock Entry
       document.getElementById('formAjusteStock').addEventListener('submit', (e) => {
         e.preventDefault();
         const product = state.productos.find(p => p.id === document.getElementById('restockProductSelect').value);
@@ -1219,7 +1307,6 @@
         }
       });
 
-      // Business Config Submit
       document.getElementById('formBusinessConfig').addEventListener('submit', (e) => {
         e.preventDefault();
         const name = document.getElementById('bizNameInput').value.trim();
@@ -1237,16 +1324,31 @@
         }
       });
 
-      // Export Buttons
       document.getElementById('btnExportCSV').addEventListener('click', () => exportData('inventory'));
       document.getElementById('btnExportSalesCSV').addEventListener('click', () => exportData('sales'));
     }
 
     function openModal(id) { document.getElementById(id).classList.add('active'); }
     function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+    function showToast(msg, icon) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.innerHTML = `<i class="fa-solid ${icon} toast-icon"></i> <span>${msg}</span>`;
+      container.appendChild(toast);
+      
+      // Trigger reflow for animation
+      toast.offsetHeight;
+      toast.classList.add('show');
+      
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
+      }, 3000);
+    }
 
     /* --------------------------------------------------------------------------
-       10. EXPORT CSV UTILITY (Handles both Inventory and Sales)
+       10. EXPORT CSV UTILITY
        -------------------------------------------------------------------------- */
     function exportData(type) {
       let csvContent = "";
