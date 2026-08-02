@@ -708,13 +708,15 @@
   <!-- ==========================================================================
      VANILLA JAVASCRIPT LOGIC & STATE MANAGEMENT
      ========================================================================== -->
-  <script>
+<script>
     /* --------------------------------------------------------------------------
        0. SUPABASE INIT & AUTH LOGIC
        -------------------------------------------------------------------------- */
-  const supabaseUrl = 'https://nmnwmzlufhxsmfmurpiq.supabase.co';
-  const supabaseKey = 'sb_publishable_cHWhcjq9qVsl_lE-1FzPOA_Q-R69ryc';
-  const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+    const supabaseUrl = 'https://nmnwmzlufhxsmfmurpiq.supabase.co';
+    const supabaseKey = 'sb_publishable_cHWhcjq9qVsl_lE-1FzPOA_Q-R69ryc';
+    
+    // CAMBIO CLAVE: Renombramos a "supabaseApp" para evitar el choque con el CDN
+    const supabaseApp = window.supabase.createClient(supabaseUrl, supabaseKey);
     let isLoginMode = true;
 
     /* --------------------------------------------------------------------------
@@ -725,13 +727,13 @@
         businessName: 'NexStock POS',
         businessLogo: null
       },
-      categorias: [], // EMPTIED FOR SAAS
-      productos: [], // EMPTIED FOR SAAS
+      categorias: [], 
+      productos: [], 
       ventas: {
-        articulosVendidos: 0, // EMPTIED FOR SAAS
-        ingresosTotales: 0.00 // EMPTIED FOR SAAS
+        articulosVendidos: 0, 
+        ingresosTotales: 0.00 
       },
-      historialVentas: [] // EMPTIED FOR SAAS
+      historialVentas: [] 
     };
 
     /* --------------------------------------------------------------------------
@@ -778,25 +780,22 @@
       initTheme();
       setupEventListeners();
       
-      // Populate Business Config form with initial state
       document.getElementById('bizNameInput').value = state.config.businessName;
 
       // Verificación de Sesión Inicial Estricta
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabaseApp.auth.getSession();
       if (!session) {
         document.querySelector('.bottom-nav').style.display = 'none';
         switchTab('auth');
       }
 
       // Supabase Auth Listener (Route Protection)
-      supabase.auth.onAuthStateChange((event, session) => {
+      supabaseApp.auth.onAuthStateChange((event, session) => {
         if (session) {
-          // Logged In -> Show App
           document.querySelector('.bottom-nav').style.display = 'flex';
           switchTab('dashboard');
-          updateAllUI(); // Render the empty states or data
+          updateAllUI(); 
         } else {
-          // Logged Out -> Show Auth
           document.querySelector('.bottom-nav').style.display = 'none';
           switchTab('auth');
         }
@@ -1185,7 +1184,7 @@
        -------------------------------------------------------------------------- */
     async function signInWithGoogle() {
       try {
-        const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+        const { error } = await supabaseApp.auth.signInWithOAuth({ provider: 'google' });
         if (error) throw error;
       } catch (error) {
         alert("Error al conectar con Google: " + error.message);
@@ -1201,7 +1200,7 @@
 
     async function handleSignOut() {
       if(confirm('¿Seguro que deseas cerrar tu sesión?')) {
-        await supabase.auth.signOut();
+        await supabaseApp.auth.signOut();
       }
     }
 
@@ -1226,10 +1225,10 @@
         
         try {
           if (isLoginMode) {
-            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            const { error } = await supabaseApp.auth.signInWithPassword({ email, password });
             if (error) throw error;
           } else {
-            const { error } = await supabase.auth.signUp({ email, password });
+            const { error } = await supabaseApp.auth.signUp({ email, password });
             if (error) throw error;
             
             alert("¡Cuenta creada exitosamente!\n\nPor favor revisa tu bandeja de entrada para confirmar tu correo antes de iniciar sesión."); 
@@ -1365,7 +1364,6 @@
       toast.innerHTML = `<i class="fa-solid ${icon} toast-icon"></i> <span>${msg}</span>`;
       container.appendChild(toast);
       
-      // Trigger reflow for animation
       toast.offsetHeight;
       toast.classList.add('show');
       
