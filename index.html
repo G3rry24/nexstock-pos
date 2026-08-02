@@ -1429,14 +1429,19 @@
             alert(`✅ ¡Éxito! El producto "${dataForState.nombre}" ha sido actualizado correctamente.`);
           }
         } else {
-          // INSERT
-          const { data: newRow, error } = await supabaseApp.from('productos').insert([dbData]).select().single();
-          if (!error && newRow) {
+          // Quitamos el .single() temporalmente
+        const { data: returnedData, error } = await supabaseApp.from('productos').insert([dbData]).select();
+            if (error) {
+           alert('Error real de Supabase: ' + error.message);
+           console.error("Detalle del error:", error);
+            } else if (returnedData && returnedData.length > 0) {
+            const newRow = returnedData[0]; // Tomamos el primer elemento del array
             dataForState.id = newRow.id;
             state.productos.unshift(dataForState);
             alert(`✅ ¡Éxito! El producto "${dataForState.nombre}" se agregó correctamente al inventario.`);
-          } else {
-            alert('Error al insertar el producto.');
+            } else {
+            alert('El producto se envió, pero el RLS bloqueó la lectura de vuelta.');
+            }
           }
         }
         
