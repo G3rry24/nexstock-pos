@@ -715,12 +715,11 @@
     const supabaseUrl = 'https://nmnwmzlufhxsmfmurpiq.supabase.co';
     const supabaseKey = 'sb_publishable_cHWhcjq9qVsl_lE-1FzPOA_Q-R69ryc';
     
-    // CAMBIO CLAVE: Renombramos a "supabaseApp" para evitar el choque con el CDN
     const supabaseApp = window.supabase.createClient(supabaseUrl, supabaseKey);
     let isLoginMode = true;
 
     /* --------------------------------------------------------------------------
-       1. GLOBAL STATE INITIALIZATION (Simulating DB - COMPLETELY EMPTIED)
+       1. GLOBAL STATE INITIALIZATION
        -------------------------------------------------------------------------- */
     const state = {
       config: {
@@ -736,8 +735,79 @@
       historialVentas: [] 
     };
 
+    // Utilidad para obtener el ID del usuario logueado
+    async function getUserId() {
+      const { data: { session } } = await supabaseApp.auth.getSession();
+      return session?.user?.id;
+    }
+
     /* --------------------------------------------------------------------------
-       2. IMAGE PROCESSING UTILITY (Compress Base64)
+       2. CORE DB FUNCTION: FETCH DATABASE ON LOGIN
+       -------------------------------------------------------------------------- */
+    async function fetchDatabase() {
+      const userId = await getUserId();
+      if (!userId) return;
+
+      try {
+        // 1. Descargar Configuración
+        const { data: configData } = await supabaseApp.from('configuracion').select('*').eq('user_id', userId).single();
+        if (configData) {
+          state.config.businessName = configData.business_name || 'NexStock POS';
+          state.config.businessLogo = configData.business_logo || null;
+        }
+
+        // 2. Descargar Categorías
+        const { data: catData } = await supabaseApp.from('categorias').select('nombre').eq('user_id', userId);
+        state.categorias = catData ? catData.map(c => c.nombre) : [];
+
+        // 3. Descargar Productos
+        const { data: prodData } = await supabaseApp.from('productos').select('*').eq('user_id', userId);
+        if (prodData) {
+          state.productos = prodData.map(p => ({
+            id: p.id,
+            nombre: p.nombre,
+            categoria: p.categoria,
+            stock: p.stock,
+            minStock: p.min_stock,
+            costo: p.costo,
+            precio: p.precio,
+            image: p.image
+          }));
+        }
+
+        // 4. Descargar Ventas
+        const { data: ventData } = await supabaseApp.from('ventas').select('*').eq('user_id', userId).order('fecha', { ascending: false });
+        if (ventData) {
+          state.historialVentas = ventData.map(v => ({
+            id: v.id,
+            productId: v.product_id,
+            nombre: v.nombre,
+            cantidad: v.cantidad,
+            total: v.total,
+            cancelada: v.cancelada,
+            fecha: v.fecha
+          }));
+
+          // Recalcular métricas de ventas
+          state.ventas.articulosVendidos = 0;
+          state.ventas.ingresosTotales = 0;
+          state.historialVentas.forEach(v => {
+            if (!v.cancelada) {
+              state.ventas.articulosVendidos += v.cantidad;
+              state.ventas.ingresosTotales += v.total;
+            }
+          });
+        }
+
+        // Refrescar UI con datos de la nube
+        updateAllUI();
+      } catch (error) {
+        console.error("Error al descargar datos de Supabase:", error);
+      }
+    }
+
+    /* --------------------------------------------------------------------------
+       3. IMAGE PROCESSING UTILITY (Compress Base64)
        -------------------------------------------------------------------------- */
     function processImageFile(file, callback) {
       if (!file) { callback(null); return; }
@@ -772,7 +842,7 @@
     }
 
     /* --------------------------------------------------------------------------
-       3. INITIALIZATION & DOM LOADED
+       4. INITIALIZATION & DOM LOADED
        -------------------------------------------------------------------------- */
     document.addEventListener('DOMContentLoaded', async () => {
       const now = new Date();
@@ -782,7 +852,6 @@
       
       document.getElementById('bizNameInput').value = state.config.businessName;
 
-      // Verificación de Sesión Inicial Estricta
       const { data: { session } } = await supabaseApp.auth.getSession();
       if (!session) {
         document.querySelector('.bottom-nav').style.display = 'none';
@@ -790,11 +859,11 @@
       }
 
       // Supabase Auth Listener (Route Protection)
-      supabaseApp.auth.onAuthStateChange((event, session) => {
+      supabaseApp.auth.onAuthStateChange(async (event, session) => {
         if (session) {
           document.querySelector('.bottom-nav').style.display = 'flex';
           switchTab('dashboard');
-          updateAllUI(); 
+          await fetchDatabase(); // Cargar info real de DB
         } else {
           document.querySelector('.bottom-nav').style.display = 'none';
           switchTab('auth');
@@ -831,7 +900,7 @@
     }
 
     /* --------------------------------------------------------------------------
-       4. TAB NAVIGATION CONTROLLER
+       5. TAB NAVIGATION CONTROLLER
        -------------------------------------------------------------------------- */
     function switchTab(tabName) {
       document.querySelectorAll('.view-section').forEach(view => view.classList.remove('active'));
@@ -863,7 +932,7 @@
     }
 
     /* --------------------------------------------------------------------------
-       5. MAIN UI UPDATERS & RENDERERS
+       6. MAIN UI UPDATERS & RENDERERS
        -------------------------------------------------------------------------- */
     function updateAllUI() {
       renderHeaderConfig();
@@ -953,7 +1022,7 @@
       const filtered = state.productos.filter(p => 
         p.nombre.toLowerCase().includes(searchQuery) || 
         p.categoria.toLowerCase().includes(searchQuery) ||
-        p.id.toLowerCase().includes(searchQuery)
+        p.id.toString().toLowerCase().includes(searchQuery)
       );
 
       if (filtered.length === 0) {
@@ -1068,7 +1137,8 @@
     }
 
     function updateCalculatedSaleTotal() {
-      const targetProduct = state.productos.find(p => p.id === document.getElementById('saleProductSelect').value);
+      const selectedId = document.getElementById('saleProductSelect').value;
+      const targetProduct = state.productos.find(p => p.id.toString() === selectedId.toString());
       const qty = parseInt(document.getElementById('saleQuantityInput').value) || 0;
       document.getElementById('saleTotalCalculated').textContent = targetProduct ? formatMXN(targetProduct.precio * qty) : formatMXN(0);
     }
@@ -1081,9 +1151,9 @@
     }
 
     /* --------------------------------------------------------------------------
-       6. CATEGORY CRUD OPERATIONS
+       7. CATEGORY CRUD OPERATIONS (SUPABASE ENABLED)
        -------------------------------------------------------------------------- */
-    function editCategory(oldName) {
+    async function editCategory(oldName) {
       const newName = prompt(`Editar el nombre de la categoría "${oldName}":`, oldName);
       if (newName && newName.trim() !== "" && newName.trim() !== oldName) {
           const finalName = newName.trim();
@@ -1091,6 +1161,13 @@
               alert("Error: Ya existe una categoría con ese nombre.");
               return;
           }
+          
+          const userId = await getUserId();
+          // Update database
+          await supabaseApp.from('categorias').update({ nombre: finalName }).eq('nombre', oldName).eq('user_id', userId);
+          await supabaseApp.from('productos').update({ categoria: finalName }).eq('categoria', oldName).eq('user_id', userId);
+
+          // Update local state
           const index = state.categorias.indexOf(oldName);
           if (index !== -1) {
               state.categorias[index] = finalName;
@@ -1103,8 +1180,15 @@
       }
     }
 
-    function deleteCategory(catName) {
+    async function deleteCategory(catName) {
       if(confirm(`¿Estás seguro de eliminar la categoría "${catName}"?\n\nNota: Los productos de esta categoría quedarán 'Sin Categoría'.`)) {
+        const userId = await getUserId();
+        
+        // Remove from db
+        await supabaseApp.from('categorias').delete().eq('nombre', catName).eq('user_id', userId);
+        await supabaseApp.from('productos').update({ categoria: 'Sin Categoría' }).eq('categoria', catName).eq('user_id', userId);
+
+        // Update local state
         const index = state.categorias.indexOf(catName);
         if (index !== -1) {
           state.categorias.splice(index, 1);
@@ -1113,6 +1197,8 @@
           });
           if(state.productos.some(p => p.categoria === "Sin Categoría") && !state.categorias.includes("Sin Categoría")) {
              state.categorias.push("Sin Categoría");
+             // Add "Sin Categoria" to DB so it persists
+             await supabaseApp.from('categorias').insert([{ user_id: userId, nombre: "Sin Categoría" }]);
           }
           updateAllUI();
           showToast(`Categoría eliminada`, "fa-trash-can");
@@ -1121,21 +1207,28 @@
     }
 
     /* --------------------------------------------------------------------------
-       7. PRODUCT CRUD OPERATIONS
+       8. PRODUCT CRUD OPERATIONS (SUPABASE ENABLED)
        -------------------------------------------------------------------------- */
-    function deleteProduct(productId) {
+    async function deleteProduct(productId) {
       if(confirm('¿Seguro que deseas eliminar este producto?')) {
-        const index = state.productos.findIndex(p => p.id === productId);
-        if (index !== -1) {
-          state.productos.splice(index, 1);
-          updateAllUI();
-          showToast(`Producto eliminado`, 'fa-trash-can');
+        const userId = await getUserId();
+        const { error } = await supabaseApp.from('productos').delete().eq('id', productId).eq('user_id', userId);
+        
+        if (!error) {
+          const index = state.productos.findIndex(p => p.id.toString() === productId.toString());
+          if (index !== -1) {
+            state.productos.splice(index, 1);
+            updateAllUI();
+            showToast(`Producto eliminado`, 'fa-trash-can');
+          }
+        } else {
+          alert('Error al eliminar producto.');
         }
       }
     }
 
     function openEditProductModal(productId) {
-      const p = state.productos.find(p => p.id === productId);
+      const p = state.productos.find(p => p.id.toString() === productId.toString());
       if (!p) return;
       document.getElementById('modalProductTitle').textContent = 'Editar Producto';
       document.getElementById('modalProductBtnText').textContent = 'Guardar Cambios';
@@ -1165,22 +1258,39 @@
       openModal('modalProduct');
     }
 
-    function anularVenta(ventaId) {
+    async function anularVenta(ventaId) {
       if(confirm('¿Seguro de anular la venta? El stock y los ingresos se revertirán.')) {
-        const venta = state.historialVentas.find(v => v.id === ventaId);
+        const venta = state.historialVentas.find(v => v.id.toString() === ventaId.toString());
         if (!venta || venta.cancelada) return;
-        const product = state.productos.find(p => p.id === venta.productId);
-        if (product) product.stock += venta.cantidad;
-        state.ventas.articulosVendidos -= venta.cantidad;
-        state.ventas.ingresosTotales -= venta.total;
-        venta.cancelada = true;
-        updateAllUI();
-        showToast('Venta anulada correctamente', 'fa-rotate-left');
+
+        const userId = await getUserId();
+        
+        // Update Sale in DB
+        const { error } = await supabaseApp.from('ventas').update({ cancelada: true }).eq('id', ventaId).eq('user_id', userId);
+        
+        if (!error) {
+          const product = state.productos.find(p => p.id.toString() === venta.productId.toString());
+          if (product) {
+            const newStock = product.stock + venta.cantidad;
+            // Update product stock in DB
+            await supabaseApp.from('productos').update({ stock: newStock }).eq('id', product.id).eq('user_id', userId);
+            product.stock = newStock;
+          }
+          
+          state.ventas.articulosVendidos -= venta.cantidad;
+          state.ventas.ingresosTotales -= venta.total;
+          venta.cancelada = true;
+          
+          updateAllUI();
+          showToast('Venta anulada correctamente', 'fa-rotate-left');
+        } else {
+          alert('Hubo un error al anular la venta en la nube.');
+        }
       }
     }
 
     /* --------------------------------------------------------------------------
-       8. SUPABASE AUTH HANDLERS
+       9. SUPABASE AUTH HANDLERS
        -------------------------------------------------------------------------- */
     async function signInWithGoogle() {
       try {
@@ -1205,7 +1315,7 @@
     }
 
     /* --------------------------------------------------------------------------
-       9. EVENT LISTENERS
+       10. EVENT LISTENERS
        -------------------------------------------------------------------------- */
     function setupEventListeners() {
       document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
@@ -1247,14 +1357,23 @@
         document.getElementById('formAddCategory').reset(); openModal('modalCategory');
       });
 
-      document.getElementById('formAddCategory').addEventListener('submit', (e) => {
+      // ADD CATEGORY (DB)
+      document.getElementById('formAddCategory').addEventListener('submit', async (e) => {
         e.preventDefault();
         const catName = document.getElementById('categoryNameInput').value.trim();
         if (catName && !state.categorias.some(c => c.toLowerCase() === catName.toLowerCase())) {
-          state.categorias.push(catName);
-          updateAllUI();
-          document.getElementById('formAddCategory').reset();
-          showToast(`Categoría "${catName}" agregada`, 'fa-folder-plus');
+          
+          const userId = await getUserId();
+          const { error } = await supabaseApp.from('categorias').insert([{ user_id: userId, nombre: catName }]);
+          
+          if (!error) {
+            state.categorias.push(catName);
+            updateAllUI();
+            document.getElementById('formAddCategory').reset();
+            showToast(`Categoría "${catName}" agregada`, 'fa-folder-plus');
+          } else {
+            alert("Error al guardar categoría en la nube");
+          }
         } else if (state.categorias.some(c => c.toLowerCase() === catName.toLowerCase())) {
           alert("La categoría ya existe.");
         }
@@ -1275,9 +1394,12 @@
         }
       });
 
-      function saveProductData(finalImage) {
+      // SAVE/UPDATE PRODUCT (DB)
+      async function saveProductData(finalImage) {
+        const userId = await getUserId();
         const editId = document.getElementById('prodEditId').value;
-        const data = {
+        
+        const dataForState = {
           nombre: document.getElementById('prodName').value.trim(),
           categoria: document.getElementById('prodCategorySelect').value,
           stock: parseInt(document.getElementById('prodStock').value) || 0,
@@ -1287,67 +1409,138 @@
           image: finalImage
         };
 
+        const dbData = {
+          user_id: userId,
+          nombre: dataForState.nombre,
+          categoria: dataForState.categoria,
+          stock: dataForState.stock,
+          min_stock: dataForState.minStock,
+          costo: dataForState.costo,
+          precio: dataForState.precio,
+          image: dataForState.image
+        };
+
         if (editId) {
-          const index = state.productos.findIndex(p => p.id === editId);
-          if(index !== -1) { state.productos[index] = { ...state.productos[index], ...data }; }
-          alert(`✅ ¡Éxito! El producto "${data.nombre}" ha sido actualizado correctamente.`);
+          // UPDATE
+          const { error } = await supabaseApp.from('productos').update(dbData).eq('id', editId).eq('user_id', userId);
+          if (!error) {
+            const index = state.productos.findIndex(p => p.id.toString() === editId.toString());
+            if(index !== -1) { state.productos[index] = { ...state.productos[index], ...dataForState }; }
+            alert(`✅ ¡Éxito! El producto "${dataForState.nombre}" ha sido actualizado correctamente.`);
+          }
         } else {
-          state.productos.unshift({ id: `PROD-${Math.floor(1000 + Math.random() * 9000)}`, ...data });
-          alert(`✅ ¡Éxito! El producto "${data.nombre}" se agregó correctamente al inventario.`);
+          // INSERT
+          const { data: newRow, error } = await supabaseApp.from('productos').insert([dbData]).select().single();
+          if (!error && newRow) {
+            dataForState.id = newRow.id;
+            state.productos.unshift(dataForState);
+            alert(`✅ ¡Éxito! El producto "${dataForState.nombre}" se agregó correctamente al inventario.`);
+          } else {
+            alert('Error al insertar el producto.');
+          }
         }
+        
         updateAllUI(); closeModal('modalProduct');
       }
 
-      document.getElementById('formRegistrarVenta').addEventListener('submit', (e) => {
+      // REGISTER SALE (DB)
+      document.getElementById('formRegistrarVenta').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const product = state.productos.find(p => p.id === document.getElementById('saleProductSelect').value);
+        const selectedId = document.getElementById('saleProductSelect').value;
+        const product = state.productos.find(p => p.id.toString() === selectedId.toString());
         const qty = parseInt(document.getElementById('saleQuantityInput').value) || 0;
 
         if (product && qty > 0 && product.stock >= qty) {
-          product.stock -= qty;
+          const userId = await getUserId();
           const total = product.precio * qty;
-          state.ventas.articulosVendidos += qty;
-          state.ventas.ingresosTotales += total;
           
-          state.historialVentas.unshift({
-            id: `VTA-${Date.now().toString().slice(-6)}`,
-            productId: product.id, nombre: product.nombre, cantidad: qty, total: total,
-            fecha: new Date().toISOString(), cancelada: false
-          });
+          const saleDbData = {
+            user_id: userId,
+            product_id: product.id,
+            nombre: product.nombre,
+            cantidad: qty,
+            total: total,
+            cancelada: false,
+            fecha: new Date().toISOString()
+          };
 
-          updateAllUI();
-          document.getElementById('saleQuantityInput').value = 1; updateCalculatedSaleTotal();
-          showToast(`¡Venta procesada! +${formatMXN(total)}`, 'fa-cash-register');
+          // Insert Sale in DB
+          const { data: newSaleRow, error: saleErr } = await supabaseApp.from('ventas').insert([saleDbData]).select().single();
+          
+          if (!saleErr && newSaleRow) {
+            // Update stock in DB
+            const newStock = product.stock - qty;
+            await supabaseApp.from('productos').update({ stock: newStock }).eq('id', product.id).eq('user_id', userId);
+
+            // Update local state
+            product.stock = newStock;
+            state.ventas.articulosVendidos += qty;
+            state.ventas.ingresosTotales += total;
+            
+            state.historialVentas.unshift({
+              id: newSaleRow.id,
+              productId: product.id, nombre: product.nombre, cantidad: qty, total: total,
+              fecha: saleDbData.fecha, cancelada: false
+            });
+
+            updateAllUI();
+            document.getElementById('saleQuantityInput').value = 1; updateCalculatedSaleTotal();
+            showToast(`¡Venta procesada! +${formatMXN(total)}`, 'fa-cash-register');
+          } else {
+            alert("Error registrando la venta en la base de datos.");
+          }
         } else {
           alert("Stock insuficiente o datos inválidos.");
         }
       });
 
-      document.getElementById('formAjusteStock').addEventListener('submit', (e) => {
+      // ADD STOCK (DB)
+      document.getElementById('formAjusteStock').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const product = state.productos.find(p => p.id === document.getElementById('restockProductSelect').value);
+        const selectedId = document.getElementById('restockProductSelect').value;
+        const product = state.productos.find(p => p.id.toString() === selectedId.toString());
         const qty = parseInt(document.getElementById('restockQuantityInput').value) || 0;
+        
         if (product && qty > 0) {
-          product.stock += qty; updateAllUI();
-          showToast(`Se agregaron ${qty} unidades a ${product.nombre}`, 'fa-boxes-packing');
-          document.getElementById('formAjusteStock').reset();
+          const userId = await getUserId();
+          const newStock = product.stock + qty;
+          
+          const { error } = await supabaseApp.from('productos').update({ stock: newStock }).eq('id', product.id).eq('user_id', userId);
+          if (!error) {
+            product.stock = newStock; updateAllUI();
+            showToast(`Se agregaron ${qty} unidades a ${product.nombre}`, 'fa-boxes-packing');
+            document.getElementById('formAjusteStock').reset();
+          } else {
+            alert("Error al actualizar el stock en la base de datos.");
+          }
         }
       });
 
-      document.getElementById('formBusinessConfig').addEventListener('submit', (e) => {
+      // BUSINESS CONFIG (DB)
+      document.getElementById('formBusinessConfig').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const name = document.getElementById('bizNameInput').value.trim();
+        const name = document.getElementById('bizNameInput').value.trim() || 'NexStock POS';
         const file = document.getElementById('bizLogoInput').files[0];
         
-        state.config.businessName = name || 'NexStock POS';
-        
-        if (file) {
-          processImageFile(file, (base64Img) => {
-            state.config.businessLogo = base64Img;
-            updateAllUI(); showToast('Configuración guardada', 'fa-store');
-          });
-        } else {
+        const saveConfigToDB = async (logoBase64) => {
+          const userId = await getUserId();
+          state.config.businessName = name;
+          if(logoBase64 !== undefined) state.config.businessLogo = logoBase64;
+          
+          const { data: existingConfig } = await supabaseApp.from('configuracion').select('id').eq('user_id', userId).single();
+          
+          if (existingConfig) {
+             await supabaseApp.from('configuracion').update({ business_name: name, business_logo: state.config.businessLogo }).eq('user_id', userId);
+          } else {
+             await supabaseApp.from('configuracion').insert([{ user_id: userId, business_name: name, business_logo: state.config.businessLogo }]);
+          }
           updateAllUI(); showToast('Configuración guardada', 'fa-store');
+        };
+
+        if (file) {
+          processImageFile(file, saveConfigToDB);
+        } else {
+          saveConfigToDB();
         }
       });
 
@@ -1374,7 +1567,7 @@
     }
 
     /* --------------------------------------------------------------------------
-       10. EXPORT CSV UTILITY
+       11. EXPORT CSV UTILITY
        -------------------------------------------------------------------------- */
     function exportData(type) {
       let csvContent = "";
@@ -1405,6 +1598,6 @@
       URL.revokeObjectURL(url);
       showToast('Archivo CSV generado', 'fa-file-csv');
     }
-  </script>
+</script>
 </body>
 </html>
