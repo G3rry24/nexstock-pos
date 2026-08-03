@@ -13,6 +13,9 @@
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
+  
   <!-- SUPABASE SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
@@ -156,6 +159,7 @@
     .alert-card { background-color: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 20px; box-shadow: var(--shadow-sm); }
     .alert-header { display: flex; align-items: center; gap: 10px; color: var(--text-primary); font-weight: 700; font-size: 0.95rem; margin-bottom: 12px; }
     .alert-header.warning { color: var(--accent-warning); }
+    .alert-header.danger { color: var(--accent-danger); }
     .alert-list { display: flex; flex-direction: column; gap: 8px; }
     .alert-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background-color: var(--accent-warning-light); border-radius: var(--radius-md); font-size: 0.85rem; }
     .alert-item-name { font-weight: 600; color: var(--text-primary); }
@@ -163,7 +167,7 @@
 
     /* Vanilla JS Chart Container */
     .chart-container { display: flex; align-items: flex-end; justify-content: space-around; height: 140px; margin-top: 20px; padding-bottom: 5px; border-bottom: 1px solid var(--border-color); position: relative; gap: 8px;}
-    .chart-bar-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: 1; height: 100%; group; }
+    .chart-bar-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: 1; height: 100%; }
     .chart-bar { width: 100%; max-width: 30px; background: linear-gradient(to top, var(--primary), #60a5fa); border-radius: 4px 4px 0 0; transition: height 0.5s ease; position: relative; }
     .chart-bar:hover::after { content: attr(data-val); position: absolute; top: -25px; left: 50%; transform: translateX(-50%); background: var(--text-primary); color: var(--bg-surface); font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .chart-label { font-size: 0.6rem; color: var(--text-secondary); margin-top: 6px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; font-weight: 600;}
@@ -183,6 +187,11 @@
     .btn-sm { padding: 8px 12px; font-size: 0.8rem; border-radius: var(--radius-sm); }
     .action-bar-top { display: flex; gap: 10px; margin-bottom: 16px; }
 
+    /* Filter Toolbar */
+    .filter-bar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-bar .search-box { flex: 1; min-width: 180px; margin-bottom: 0; }
+    .filter-bar .category-filter-select { width: 140px; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--border-color); background-color: var(--bg-surface); color: var(--text-primary); font-size: 0.85rem; outline: none; font-weight: 600; }
+
     /* ==========================================================================
        SEARCH & LISTS
        ========================================================================== */
@@ -192,7 +201,8 @@
     .search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
     
     .product-list { display: flex; flex-direction: column; gap: 12px; }
-    .product-card { background-color: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 12px; transition: border-color var(--transition-normal); }
+    .product-card { background-color: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 12px; transition: border-color var(--transition-normal), transform var(--transition-fast); }
+    .product-card:hover { border-color: var(--primary-light); }
     .product-category-tag { font-size: 0.65rem; font-weight: 800; padding: 3px 8px; border-radius: var(--radius-full); background-color: var(--primary-light); color: var(--primary); text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; display: inline-block;}
     .product-name { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); line-height: 1.2; margin-top:4px;}
     
@@ -215,7 +225,7 @@
     .detail-label { font-size: 0.65rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; }
     .detail-val { font-size: 0.88rem; font-weight: 800; color: var(--text-primary); }
 
-    .product-actions { display: flex; gap: 8px; }
+    .product-actions { display: flex; gap: 8px; width: 100%; margin-top: 4px; }
     .btn-icon { padding: 8px 12px; font-size: 0.8rem; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 6px; font-weight: 700; border: 1px solid var(--border-color); background-color: transparent; color: var(--text-secondary); cursor: pointer; transition: all var(--transition-fast); flex: 1; justify-content: center; }
     .btn-icon:hover { background-color: var(--bg-surface-subtle); color: var(--text-primary); }
     .btn-icon.edit-btn:hover { color: var(--primary); border-color: var(--primary-light); background-color: var(--primary-light); }
@@ -234,16 +244,20 @@
     .sub-tab-btn { flex: 1; padding: 8px 12px; font-size: 0.82rem; font-weight: 700; border: none; background: transparent; color: var(--text-secondary); border-radius: var(--radius-sm); cursor: pointer; transition: all var(--transition-fast); }
     .sub-tab-btn.active { background-color: var(--bg-surface); color: var(--primary); box-shadow: var(--shadow-sm); }
 
+    /* Danger Card */
+    .danger-card { background-color: var(--accent-danger-light); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-lg); padding: 18px; margin-top: 24px; }
+
     /* ==========================================================================
        MODALS
        ========================================================================== */
-    .modal-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 100; display: flex; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity var(--transition-normal); }
+    .modal-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(15, 23, 42, 0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 100; display: flex; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity var(--transition-normal); }
     .modal-overlay.active { opacity: 1; pointer-events: auto; }
     .modal-card { width: 100%; background-color: var(--bg-surface); border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 24px 20px 30px 20px; box-shadow: var(--shadow-lg); transform: translateY(100%); transition: transform var(--transition-normal); max-height: 88vh; overflow-y: auto; }
     .modal-overlay.active .modal-card { transform: translateY(0); }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     .modal-title { font-size: 1.15rem; font-weight: 800; color: var(--text-primary); }
-    .modal-close-btn { background: var(--bg-surface-subtle); border: 1px solid var(--border-color); color: var(--text-secondary); width: 32px; height: 32px; border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .modal-close-btn { background: var(--bg-surface-subtle); border: 1px solid var(--border-color); color: var(--text-secondary); width: 32px; height: 32px; border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all var(--transition-fast); }
+    .modal-close-btn:hover { color: var(--accent-danger); border-color: var(--accent-danger-light); }
 
     /* ==========================================================================
        BOTTOM NAVIGATION BAR
@@ -440,10 +454,15 @@
           </button>
         </div>
 
-        <!-- Real-time Live Search -->
-        <div class="search-box">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="text" id="searchInput" class="search-input" placeholder="Buscar producto por nombre o ID..." />
+        <!-- Search & Category Filter Toolbar -->
+        <div class="filter-bar">
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="searchInput" class="search-input" placeholder="Buscar por nombre o ID..." />
+          </div>
+          <select id="categoryFilterSelect" class="category-filter-select">
+            <option value="">Todas las cat.</option>
+          </select>
         </div>
 
         <!-- Products Cards List -->
@@ -573,14 +592,28 @@
             </div>
             <div style="display: flex; justify-content: space-between;">
               <span>Versión de la App:</span>
-              <strong style="color: var(--text-primary);">v4.0.0 Cloud</strong>
+              <strong style="color: var(--text-primary);">v4.1.0 Cloud</strong>
             </div>
           </div>
         </div>
         
-        <button class="btn btn-danger" style="margin-top: 10px; width: 100%;" onclick="handleSignOut()">
+        <button class="btn btn-outline" style="margin-top: 10px; width: 100%;" onclick="handleSignOut()">
           <i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesión
         </button>
+
+        <!-- ZONA DE PELIGRO: ELIMINAR CUENTA -->
+        <div class="danger-card">
+          <div class="alert-header danger" style="margin-bottom: 8px;">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>Zona de Peligro</span>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 14px; line-height: 1.4;">
+            Si eliminas tu cuenta, se borrarán de forma permanente todos tus productos, categorías, historial de ventas y configuraciones almacenados en la nube.
+          </p>
+          <button class="btn btn-danger" type="button" onclick="openModal('modalDeleteAccount')">
+            <i class="fa-solid fa-user-xmark"></i> Eliminar Cuenta
+          </button>
+        </div>
       </section>
 
     </main>
@@ -590,7 +623,7 @@
          ========================================== -->
     
     <!-- Modal: Gestión de Categorías -->
-    <div class="modal-overlay" id="modalCategory">
+    <div class="modal-overlay" id="modalCategory" onclick="handleOverlayClick(event, 'modalCategory')">
       <div class="modal-card">
         <div class="modal-header">
           <h3 class="modal-title">Gestión de Categorías</h3>
@@ -620,7 +653,7 @@
     </div>
 
     <!-- Modal: Nuevo/Editar Producto -->
-    <div class="modal-overlay" id="modalProduct">
+    <div class="modal-overlay" id="modalProduct" onclick="handleOverlayClick(event, 'modalProduct')">
       <div class="modal-card" style="max-height: 90vh;">
         <div class="modal-header">
           <h3 class="modal-title" id="modalProductTitle">Nuevo Producto</h3>
@@ -678,6 +711,40 @@
       </div>
     </div>
 
+    <!-- Modal: Eliminar Cuenta (Confirmación) -->
+    <div class="modal-overlay" id="modalDeleteAccount" onclick="handleOverlayClick(event, 'modalDeleteAccount')">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 class="modal-title" style="color: var(--accent-danger);">
+            <i class="fa-solid fa-triangle-exclamation"></i> ¿Eliminar Cuenta?
+          </h3>
+          <button class="modal-close-btn" onclick="closeModal('modalDeleteAccount')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5;">
+          Esta acción es <strong>irreversible</strong>. Se eliminarán permanentemente todos tus productos, ventas, categorías y configuraciones de la base de datos.
+        </p>
+
+        <form id="formDeleteAccount">
+          <div class="form-group">
+            <label class="form-label" for="deleteConfirmInput">Escribe <strong>ELIMINAR</strong> para confirmar:</label>
+            <input type="text" id="deleteConfirmInput" class="form-control" placeholder="ELIMINAR" autocomplete="off" required />
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-top: 16px;">
+            <button type="button" class="btn btn-outline" onclick="closeModal('modalDeleteAccount')">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-danger" id="btnConfirmDeleteAccount">
+              <i class="fa-solid fa-trash-can"></i> Confirmar Eliminación
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- ==========================================
          FIXED BOTTOM NAVIGATION BAR
          ========================================== -->
@@ -708,7 +775,7 @@
   <!-- ==========================================================================
      VANILLA JAVASCRIPT LOGIC & STATE MANAGEMENT
      ========================================================================== -->
-<script>
+  <script>
     /* --------------------------------------------------------------------------
        0. SUPABASE INIT & AUTH LOGIC
        -------------------------------------------------------------------------- */
@@ -750,7 +817,7 @@
 
       try {
         // 1. Descargar Configuración
-        const { data: configData } = await supabaseApp.from('configuracion').select('*').eq('user_id', userId).single();
+        const { data: configData } = await supabaseApp.from('configuracion').select('*').eq('user_id', userId).maybeSingle();
         if (configData) {
           state.config.businessName = configData.business_name || 'NexStock POS';
           state.config.businessLogo = configData.business_logo || null;
@@ -776,8 +843,15 @@
         }
 
         // 4. Descargar Ventas
-        const { data: ventData } = await supabaseApp.from('ventas').select('*').eq('user_id', userId).order('fecha', { ascending: false });
-        if (ventData) {
+        const { data: ventData } = await supabaseApp.from('ventas').select('*').eq('user_id', userId);
+        if (ventData && ventData.length > 0) {
+          // Ordenar en JavaScript por fecha de manera segura
+          ventData.sort((a, b) => {
+            const dateA = new Date(a.fecha || a.created_at || 0).getTime();
+            const dateB = new Date(b.fecha || b.created_at || 0).getTime();
+            return dateB - dateA;
+          });
+
           state.historialVentas = ventData.map(v => ({
             id: v.id,
             productId: v.product_id,
@@ -785,7 +859,7 @@
             cantidad: v.cantidad,
             total: v.total,
             cancelada: v.cancelada,
-            fecha: v.fecha
+            fecha: v.fecha || v.created_at || new Date().toISOString()
           }));
 
           // Recalcular métricas de ventas
@@ -869,6 +943,15 @@
           switchTab('auth');
         }
       });
+
+      // Escape key listener for closing active modals
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          document.querySelectorAll('.modal-overlay.active').forEach(modal => {
+            modal.classList.remove('active');
+          });
+        }
+      });
     });
 
     function initTheme() {
@@ -937,9 +1020,9 @@
     function updateAllUI() {
       renderHeaderConfig();
       renderDashboard();
+      renderCategorySelectOptions();
       renderProductsList();
       renderSalesDropdowns();
-      renderCategorySelectOptions();
       renderCategoryManager();
       renderAccountStats();
       renderSalesHistory();
@@ -1018,12 +1101,15 @@
     function renderProductsList() {
       const container = document.getElementById('productsContainer');
       const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
+      const catFilter = document.getElementById('categoryFilterSelect').value;
 
-      const filtered = state.productos.filter(p => 
-        p.nombre.toLowerCase().includes(searchQuery) || 
-        p.categoria.toLowerCase().includes(searchQuery) ||
-        p.id.toString().toLowerCase().includes(searchQuery)
-      );
+      const filtered = state.productos.filter(p => {
+        const matchesSearch = p.nombre.toLowerCase().includes(searchQuery) || 
+                              p.categoria.toLowerCase().includes(searchQuery) ||
+                              p.id.toString().toLowerCase().includes(searchQuery);
+        const matchesCat = !catFilter || p.categoria === catFilter;
+        return matchesSearch && matchesCat;
+      });
 
       if (filtered.length === 0) {
         container.innerHTML = `<div class="empty-state"><i class="fa-solid fa-box-open"></i><p>No se encontraron productos</p></div>`;
@@ -1032,7 +1118,6 @@
 
       container.innerHTML = filtered.map(p => {
         const isLowStock = p.stock <= p.minStock;
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${p.id}&color=2563eb`;
         const imgHtml = p.image 
           ? `<img src="${p.image}" style="width:100%; height:100%; object-fit:cover;" />` 
           : `<i class="fa-solid fa-image" style="font-size:24px; color:var(--text-muted);"></i>`;
@@ -1060,14 +1145,10 @@
               <div class="detail-item"><span class="detail-label">Min. Stock</span><span class="detail-val" style="color: var(--text-secondary);">${p.minStock}</span></div>
             </div>
             
-            <div style="display:flex; justify-content: space-between; align-items:center; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color);">
-              <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
-                <img src="${qrUrl}" style="width: 44px; height: 44px; border-radius: 4px; padding: 2px; background: #fff; border: 1px solid var(--border-color);" alt="QR">
-                <span style="font-size: 0.55rem; color: var(--text-muted); font-weight:bold;">ESCANEAR</span>
-              </div>
-              <div class="product-actions" style="margin-top:0; flex: 1; margin-left: 14px;">
+            <div style="display:flex; justify-content: flex-end; align-items:center; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color);">
+              <div class="product-actions">
                 <button class="btn-icon edit-btn" onclick="openEditProductModal('${p.id}')"><i class="fa-solid fa-pen-to-square"></i> Editar</button>
-                <button class="btn-icon delete-btn" onclick="deleteProduct('${p.id}')"><i class="fa-solid fa-trash-can"></i></button>
+                <button class="btn-icon delete-btn" onclick="deleteProduct('${p.id}')"><i class="fa-solid fa-trash-can"></i> Eliminar</button>
               </div>
             </div>
           </div>
@@ -1104,6 +1185,11 @@
     /* --- DROPDOWNS & MANAGERS --- */
     function renderCategorySelectOptions() {
       document.getElementById('prodCategorySelect').innerHTML = state.categorias.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+      
+      const filterSelect = document.getElementById('categoryFilterSelect');
+      const currentVal = filterSelect.value;
+      filterSelect.innerHTML = `<option value="">Todas las cat.</option>` + state.categorias.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+      filterSelect.value = currentVal;
     }
     
     function renderCategoryManager() {
@@ -1290,7 +1376,7 @@
     }
 
     /* --------------------------------------------------------------------------
-       9. SUPABASE AUTH HANDLERS
+       9. SUPABASE AUTH & ACCOUNT DELETION HANDLERS
        -------------------------------------------------------------------------- */
     async function signInWithGoogle() {
       try {
@@ -1314,12 +1400,54 @@
       }
     }
 
+    async function handleDeleteAccount() {
+      const userId = await getUserId();
+      if (!userId) {
+        alert("No se detectó una sesión activa.");
+        return;
+      }
+
+      const btn = document.getElementById('btnConfirmDeleteAccount');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Eliminando...';
+
+      try {
+        // 1. Eliminar todos los registros de los datos del usuario en la base de datos
+        await supabaseApp.from('ventas').delete().eq('user_id', userId);
+        await supabaseApp.from('productos').delete().eq('user_id', userId);
+        await supabaseApp.from('categorias').delete().eq('user_id', userId);
+        await supabaseApp.from('configuracion').delete().eq('user_id', userId);
+
+        // 2. Cerrar la sesión del usuario
+        await supabaseApp.auth.signOut();
+
+        // 3. Resetear el estado local
+        state.config.businessName = 'NexStock POS';
+        state.config.businessLogo = null;
+        state.categorias = [];
+        state.productos = [];
+        state.historialVentas = [];
+        state.ventas = { articulosVendidos: 0, ingresosTotales: 0 };
+
+        closeModal('modalDeleteAccount');
+        document.getElementById('deleteConfirmInput').value = '';
+        showToast('Cuenta y datos eliminados con éxito', 'fa-user-slash');
+      } catch (error) {
+        console.error("Error al eliminar la cuenta:", error);
+        alert("Error al eliminar los datos de la cuenta: " + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-trash-can"></i> Confirmar Eliminación';
+      }
+    }
+
     /* --------------------------------------------------------------------------
        10. EVENT LISTENERS
        -------------------------------------------------------------------------- */
     function setupEventListeners() {
       document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
       document.getElementById('searchInput').addEventListener('input', renderProductsList);
+      document.getElementById('categoryFilterSelect').addEventListener('change', renderProductsList);
       document.getElementById('saleProductSelect').addEventListener('change', updateCalculatedSaleTotal);
       document.getElementById('saleQuantityInput').addEventListener('input', updateCalculatedSaleTotal);
 
@@ -1355,6 +1483,17 @@
       document.getElementById('btnOpenProductModal').addEventListener('click', openNewProductModal);
       document.getElementById('btnOpenCategoryModal').addEventListener('click', () => {
         document.getElementById('formAddCategory').reset(); openModal('modalCategory');
+      });
+
+      // DELETE ACCOUNT SUBMIT FORM
+      document.getElementById('formDeleteAccount').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const confirmVal = document.getElementById('deleteConfirmInput').value.trim();
+        if (confirmVal === 'ELIMINAR') {
+          handleDeleteAccount();
+        } else {
+          alert("Debes escribir la palabra ELIMINAR para confirmar la eliminación de tu cuenta.");
+        }
       });
 
       // ADD CATEGORY (DB)
@@ -1426,20 +1565,22 @@
           if (!error) {
             const index = state.productos.findIndex(p => p.id.toString() === editId.toString());
             if(index !== -1) { state.productos[index] = { ...state.productos[index], ...dataForState }; }
-            alert(`✅ ¡Éxito! El producto "${dataForState.nombre}" ha sido actualizado correctamente.`);
+            showToast(`Producto "${dataForState.nombre}" actualizado`, 'fa-check');
+          } else {
+            alert("Error al actualizar producto en la nube: " + error.message);
           }
         } else {
-          // INSERT - Modificado para depurar el error sin fallas de sintaxis
+          // INSERT
           const { data: returnedData, error } = await supabaseApp.from('productos').insert([dbData]).select();
           
           if (error) {
             alert('Error real de Supabase: ' + error.message);
             console.error("Detalle del error:", error);
           } else if (returnedData && returnedData.length > 0) {
-            const newRow = returnedData[0]; // Tomamos el primer elemento del array
+            const newRow = returnedData[0];
             dataForState.id = newRow.id;
             state.productos.unshift(dataForState);
-            alert(`✅ ¡Éxito! El producto "${dataForState.nombre}" se agregó correctamente al inventario.`);
+            showToast(`Producto "${dataForState.nombre}" creado`, 'fa-box');
           } else {
             alert('El producto se envió, pero el RLS bloqueó la lectura de vuelta.');
           }
@@ -1460,7 +1601,7 @@
           const userId = await getUserId();
           const total = product.precio * qty;
           
-          const saleDbData = {
+          let saleDbData = {
             user_id: userId,
             product_id: product.id,
             nombre: product.nombre,
@@ -1471,9 +1612,21 @@
           };
 
           // Insert Sale in DB
-          const { data: newSaleRow, error: saleErr } = await supabaseApp.from('ventas').insert([saleDbData]).select().single();
+          let res = await supabaseApp.from('ventas').insert([saleDbData]).select();
           
-          if (!saleErr && newSaleRow) {
+          // Si falla porque la columna 'fecha' no existe en la tabla de Supabase, reintentamos sin esa columna
+          if (res.error && res.error.message && res.error.message.includes('fecha')) {
+            delete saleDbData.fecha;
+            res = await supabaseApp.from('ventas').insert([saleDbData]).select();
+          }
+
+          const saleErr = res.error;
+          const insertedRows = res.data;
+          
+          if (!saleErr) {
+            const insertedRow = (insertedRows && insertedRows.length > 0) ? insertedRows[0] : {};
+            const saleId = insertedRow.id || Date.now();
+
             // Update stock in DB
             const newStock = product.stock - qty;
             await supabaseApp.from('productos').update({ stock: newStock }).eq('id', product.id).eq('user_id', userId);
@@ -1484,16 +1637,23 @@
             state.ventas.ingresosTotales += total;
             
             state.historialVentas.unshift({
-              id: newSaleRow.id,
-              productId: product.id, nombre: product.nombre, cantidad: qty, total: total,
-              fecha: saleDbData.fecha, cancelada: false
+              id: saleId,
+              productId: product.id,
+              nombre: product.nombre,
+              cantidad: qty,
+              total: total,
+              fecha: insertedRow.fecha || insertedRow.created_at || saleDbData.fecha || new Date().toISOString(),
+              cancelada: false
             });
 
             updateAllUI();
-            document.getElementById('saleQuantityInput').value = 1; updateCalculatedSaleTotal();
+            document.getElementById('saleQuantityInput').value = 1;
+            updateCalculatedSaleTotal();
             showToast(`¡Venta procesada! +${formatMXN(total)}`, 'fa-cash-register');
           } else {
-            alert("Error registrando la venta en la base de datos.");
+            const errorMsg = saleErr.message || "Error desconocido";
+            console.error("Detalle error Supabase al registrar venta:", saleErr);
+            alert("Error registrando la venta en la base de datos: " + errorMsg);
           }
         } else {
           alert("Stock insuficiente o datos inválidos.");
@@ -1556,6 +1716,12 @@
 
     function openModal(id) { document.getElementById(id).classList.add('active'); }
     function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+    function handleOverlayClick(event, id) {
+      if (event.target === document.getElementById(id)) {
+        closeModal(id);
+      }
+    }
+
     function showToast(msg, icon) {
       const container = document.getElementById('toastContainer');
       const toast = document.createElement('div');
@@ -1604,6 +1770,6 @@
       URL.revokeObjectURL(url);
       showToast('Archivo CSV generado', 'fa-file-csv');
     }
-</script>
+  </script>
 </body>
 </html>
