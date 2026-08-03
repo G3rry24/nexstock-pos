@@ -354,9 +354,12 @@
                 <label class="form-label">Correo Electrónico</label>
                 <input type="email" id="authEmail" class="form-control" placeholder="tu@correo.com" required />
               </div>
-              <div class="form-group">
+              <div class="form-group" id="authPasswordGroup">
                 <label class="form-label">Contraseña</label>
                 <input type="password" id="authPassword" class="form-control" placeholder="••••••••" required />
+                <div style="text-align: right; margin-top: 4px;">
+                  <button type="button" style="background:none; border:none; color:var(--primary); font-size: 0.75rem; font-weight:600; cursor:pointer;" onclick="toggleForgotPassword()">¿Olvidaste tu contraseña?</button>
+                </div>
               </div>
               <button type="submit" class="btn btn-primary" id="btnAuthSubmit" style="margin-top: 16px; padding: 14px;">
                 Iniciar Sesión
@@ -563,6 +566,26 @@
           <span>Mi Cuenta</span>
         </div>
 
+        <!-- Control de la Cuenta -->
+        <div class="alert-card" id="accountControlCard" style="display: none;">
+          <h3 style="font-size: 1.05rem; font-weight: 800; margin-bottom: 12px;">Control de la Cuenta</h3>
+          <div style="font-size: 0.9rem; color: var(--text-primary); display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-secondary);">Correo:</span>
+              <strong id="accUserEmail">...</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-secondary);">Método de Ingreso:</span>
+              <strong id="accUserProvider" style="text-transform: capitalize;">...</strong>
+            </div>
+            <div id="changePasswordBtnContainer" style="display: none; margin-top: 10px;">
+              <button class="btn btn-outline" style="width: 100%; border-color: var(--primary); color: var(--primary);" onclick="openChangePasswordModal()">
+                <i class="fa-solid fa-key"></i> Cambiar Contraseña
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Configuración del Negocio -->
         <div class="alert-card">
           <h3 style="font-size: 1.05rem; font-weight: 800; margin-bottom: 12px;">Personalización del Negocio</h3>
@@ -717,6 +740,44 @@
       </div>
     </div>
 
+    <!-- Modal: Cambiar Contraseña -->
+    <div class="modal-overlay" id="modalChangePassword" onclick="handleOverlayClick(event, 'modalChangePassword')">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 class="modal-title"><i class="fa-solid fa-key"></i> Cambiar Contraseña</h3>
+          <button class="modal-close-btn" onclick="closeModal('modalChangePassword')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <form id="formChangePassword">
+          <div class="form-group">
+            <label class="form-label">Nueva Contraseña</label>
+            <input type="password" id="newPasswordInput" class="form-control" placeholder="••••••••" required minlength="6"/>
+          </div>
+          <button type="submit" class="btn btn-primary" id="btnChangePasswordSubmit" style="margin-top: 10px;">
+            Guardar Cambios
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: Restablecer Contraseña (Recovery) -->
+    <div class="modal-overlay" id="modalResetPassword" onclick="handleOverlayClick(event, 'modalResetPassword')">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 class="modal-title"><i class="fa-solid fa-unlock-keyhole"></i> Restablecer Contraseña</h3>
+        </div>
+        <form id="formResetPassword">
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">Ingresa tu nueva contraseña para acceder a tu cuenta.</p>
+          <div class="form-group">
+            <label class="form-label">Nueva Contraseña</label>
+            <input type="password" id="recoveryPasswordInput" class="form-control" placeholder="••••••••" required minlength="6"/>
+          </div>
+          <button type="submit" class="btn btn-primary" id="btnResetPasswordSubmit" style="margin-top: 10px;">
+            Restablecer
+          </button>
+        </form>
+      </div>
+    </div>
+
     <!-- Modal: Eliminar Cuenta (Confirmación) -->
     <div class="modal-overlay" id="modalDeleteAccount" onclick="handleOverlayClick(event, 'modalDeleteAccount')">
       <div class="modal-card">
@@ -790,6 +851,7 @@
     
     const supabaseApp = window.supabase.createClient(supabaseUrl, supabaseKey);
     let isLoginMode = true;
+    let isForgotPasswordMode = false;
 
     /* --------------------------------------------------------------------------
        1. GLOBAL STATE INITIALIZATION
@@ -940,6 +1002,10 @@
 
       // Supabase Auth Listener (Route Protection)
       supabaseApp.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          openModal('modalResetPassword');
+          return;
+        }
         if (session) {
           document.querySelector('.bottom-nav').style.display = 'flex';
           switchTab('dashboard');
@@ -1032,6 +1098,21 @@
       renderCategoryManager();
       renderAccountStats();
       renderSalesHistory();
+
+      // Account Info Logic
+      supabaseApp.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          document.getElementById('accountControlCard').style.display = 'block';
+          document.getElementById('accUserEmail').innerText = user.email || 'N/A';
+          const provider = user.app_metadata?.provider || 'email';
+          document.getElementById('accUserProvider').innerText = provider;
+          if (provider === 'email') {
+             document.getElementById('changePasswordBtnContainer').style.display = 'block';
+          } else {
+             document.getElementById('changePasswordBtnContainer').style.display = 'none';
+          }
+        }
+      });
     }
     
     function renderHeaderConfig() {
@@ -1446,9 +1527,40 @@
 
     function toggleAuthMode() {
       isLoginMode = !isLoginMode;
+      isForgotPasswordMode = false;
+      document.getElementById('authPasswordGroup').style.display = 'block';
       document.getElementById('authTitle').innerText = isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta';
       document.getElementById('btnAuthSubmit').innerText = isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta';
+      document.getElementById('btnAuthToggle').style.display = '';
       document.getElementById('btnAuthToggle').innerText = isLoginMode ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia Sesión';
+      const cancelBtn = document.getElementById('btnCancelForgot');
+      if (cancelBtn) cancelBtn.remove();
+    }
+
+    function toggleForgotPassword() {
+      isForgotPasswordMode = true;
+      document.getElementById('authTitle').innerText = 'Recuperar Contraseña';
+      document.getElementById('authPasswordGroup').style.display = 'none';
+      document.getElementById('btnAuthSubmit').innerText = 'Enviar Enlace';
+      document.getElementById('btnAuthToggle').style.display = 'none';
+      
+      if(!document.getElementById('btnCancelForgot')) {
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'btn btn-outline';
+        cancelBtn.style.marginTop = '16px';
+        cancelBtn.innerText = 'Cancelar';
+        cancelBtn.id = 'btnCancelForgot';
+        cancelBtn.onclick = () => {
+          isForgotPasswordMode = false;
+          cancelBtn.remove();
+          document.getElementById('authPasswordGroup').style.display = 'block';
+          document.getElementById('authTitle').innerText = 'Iniciar Sesión';
+          document.getElementById('btnAuthSubmit').innerText = 'Iniciar Sesión';
+          document.getElementById('btnAuthToggle').style.display = '';
+        };
+        document.getElementById('formAuth').parentElement.appendChild(cancelBtn);
+      }
     }
 
     async function handleSignOut() {
@@ -1533,7 +1645,12 @@
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';
         
         try {
-          if (isLoginMode) {
+          if (isForgotPasswordMode) {
+            const { error } = await supabaseApp.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+            if (error) throw error;
+            alert("Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.");
+            document.getElementById('btnCancelForgot').click();
+          } else if (isLoginMode) {
             const { error } = await supabaseApp.auth.signInWithPassword({ email, password });
             if (error) throw error;
           } else {
@@ -1547,7 +1664,11 @@
           alert("Error: " + error.message);
         } finally {
           btn.disabled = false;
-          btn.innerHTML = isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta';
+          if (isForgotPasswordMode) {
+             btn.innerHTML = 'Enviar Enlace';
+          } else {
+             btn.innerHTML = isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta';
+          }
         }
       });
 
@@ -1783,6 +1904,32 @@
 
       document.getElementById('btnExportCSV').addEventListener('click', () => exportData('inventory'));
       document.getElementById('btnExportSalesCSV').addEventListener('click', () => exportData('sales'));
+
+      document.getElementById('formChangePassword').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newPassword = document.getElementById('newPasswordInput').value;
+        const btn = document.getElementById('btnChangePasswordSubmit');
+        btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+        const { error } = await supabaseApp.auth.updateUser({ password: newPassword });
+        btn.disabled = false; btn.innerHTML = 'Guardar Cambios';
+        if (error) { alert("Error al cambiar contraseña: " + error.message); }
+        else { showToast('Contraseña cambiada con éxito', 'fa-check'); closeModal('modalChangePassword'); document.getElementById('newPasswordInput').value = ''; }
+      });
+
+      document.getElementById('formResetPassword').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const newPassword = document.getElementById('recoveryPasswordInput').value;
+        const btn = document.getElementById('btnResetPasswordSubmit');
+        btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Restableciendo...';
+        const { error } = await supabaseApp.auth.updateUser({ password: newPassword });
+        btn.disabled = false; btn.innerHTML = 'Restablecer';
+        if (error) { alert("Error al restablecer contraseña: " + error.message); }
+        else { showToast('Contraseña restablecida con éxito', 'fa-check'); closeModal('modalResetPassword'); document.getElementById('recoveryPasswordInput').value = ''; switchTab('dashboard'); }
+      });
+    }
+
+    function openChangePasswordModal() {
+      openModal('modalChangePassword');
     }
 
     function openModal(id) { document.getElementById(id).classList.add('active'); }
