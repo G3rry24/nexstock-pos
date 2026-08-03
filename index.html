@@ -517,11 +517,17 @@
           
           <!-- HISTORIAL RECIENTE -->
           <div class="history-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
               <h4 style="font-size: 1rem; color: var(--text-primary);">Historial Reciente</h4>
-              <button class="btn-outline btn-sm" id="btnExportSalesCSV" style="width:auto;">
-                <i class="fa-solid fa-download"></i> CSV
-              </button>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <input type="date" id="salesDateFilter" class="form-control" style="font-size: 0.78rem; padding: 6px 8px; width: 130px;" title="Filtrar por fecha" />
+                <button class="btn-outline btn-sm" id="btnClearDateFilter" style="padding: 6px 8px; width: auto; display: none;" title="Limpiar filtro de fecha">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+                <button class="btn-outline btn-sm" id="btnExportSalesCSV" style="width:auto; padding: 6px 10px;">
+                  <i class="fa-solid fa-download"></i> CSV
+                </button>
+              </div>
             </div>
             
             <div id="salesHistoryContainer">
@@ -1159,11 +1165,28 @@
     /* --- VISTA 3: HISTORIAL DE VENTAS --- */
     function renderSalesHistory() {
       const container = document.getElementById('salesHistoryContainer');
-      if (state.historialVentas.length === 0) {
-        container.innerHTML = `<div class="empty-state"><i class="fa-solid fa-receipt"></i><p>Aún no hay ventas</p></div>`;
+      const dateFilter = document.getElementById('salesDateFilter')?.value;
+
+      let filteredSales = state.historialVentas;
+
+      if (dateFilter) {
+        filteredSales = filteredSales.filter(v => {
+          const d = new Date(v.fecha);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          const saleLocalDate = `${y}-${m}-${day}`;
+          return saleLocalDate === dateFilter || (v.fecha && v.fecha.startsWith(dateFilter));
+        });
+      }
+
+      if (filteredSales.length === 0) {
+        const msg = dateFilter ? 'No hay ventas en la fecha seleccionada' : 'Aún no hay ventas';
+        container.innerHTML = `<div class="empty-state"><i class="fa-solid fa-receipt"></i><p>${msg}</p></div>`;
         return;
       }
-      container.innerHTML = state.historialVentas.map(venta => {
+
+      container.innerHTML = filteredSales.map(venta => {
         const dateObj = new Date(venta.fecha);
         const dateStr = dateObj.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
         return `
@@ -1173,9 +1196,14 @@
               <div class="history-meta">${dateStr} | ID: ${venta.id}</div>
               ${venta.cancelada ? '<span class="cancelled-badge">CANCELADA</span>' : ''}
             </div>
-            <div style="text-align: right;">
+            <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
               <div class="history-amount">${formatMXN(venta.total)}</div>
-              ${!venta.cancelada ? `<button class="btn-anular" onclick="anularVenta('${venta.id}')">Anular</button>` : ''}
+              <div style="display: flex; gap: 4px; margin-top: 4px;">
+                ${!venta.cancelada ? `<button class="btn-anular" onclick="anularVenta('${venta.id}')">Anular</button>` : ''}
+                <button class="btn-anular" style="border-color: var(--accent-danger); color: var(--accent-danger);" onclick="eliminarVenta('${venta.id}')" title="Eliminar movimiento">
+                  <i class="fa-solid fa-trash-can"></i> Eliminar
+                </button>
+              </div>
             </div>
           </div>
         `;
@@ -1375,6 +1403,35 @@
       }
     }
 
+    async function eliminarVenta(ventaId) {
+      if(confirm('¿Estás seguro de eliminar este registro del historial? Se borrará permanentemente de la base de datos.')) {
+        const userId = await getUserId();
+        const { error } = await supabaseApp.from('ventas').delete().eq('id', ventaId).eq('user_id', userId);
+
+        if (!error) {
+          const index = state.historialVentas.findIndex(v => v.id.toString() === ventaId.toString());
+          if (index !== -1) {
+            state.historialVentas.splice(index, 1);
+            
+            // Recalcular métricas de ventas
+            state.ventas.articulosVendidos = 0;
+            state.ventas.ingresosTotales = 0;
+            state.historialVentas.forEach(v => {
+              if (!v.cancelada) {
+                state.ventas.articulosVendidos += v.cantidad;
+                state.ventas.ingresosTotales += v.total;
+              }
+            });
+          }
+
+          updateAllUI();
+          showToast('Movimiento eliminado del historial', 'fa-trash-can');
+        } else {
+          alert('Error al eliminar el registro en la nube: ' + error.message);
+        }
+      }
+    }
+
     /* --------------------------------------------------------------------------
        9. SUPABASE AUTH & ACCOUNT DELETION HANDLERS
        -------------------------------------------------------------------------- */
@@ -1450,6 +1507,20 @@
       document.getElementById('categoryFilterSelect').addEventListener('change', renderProductsList);
       document.getElementById('saleProductSelect').addEventListener('change', updateCalculatedSaleTotal);
       document.getElementById('saleQuantityInput').addEventListener('input', updateCalculatedSaleTotal);
+
+      // Filtro de Fecha en Historial de Ventas
+      document.getElementById('salesDateFilter').addEventListener('change', (e) => {
+        const clearBtn = document.getElementById('btnClearDateFilter');
+        clearBtn.style.display = e.target.value ? 'inline-flex' : 'none';
+        renderSalesHistory();
+      });
+
+      document.getElementById('btnClearDateFilter').addEventListener('click', () => {
+        const dateInput = document.getElementById('salesDateFilter');
+        dateInput.value = '';
+        document.getElementById('btnClearDateFilter').style.display = 'none';
+        renderSalesHistory();
+      });
 
       // Auth Submit
       document.getElementById('formAuth').addEventListener('submit', async (e) => {
@@ -1652,8 +1723,8 @@
             showToast(`¡Venta procesada! +${formatMXN(total)}`, 'fa-cash-register');
           } else {
             const errorMsg = saleErr.message || "Error desconocido";
-            alert("Error real de Supabase: " + saleErr?.message);
-            console.error("Detalle del error de venta:", saleErr);
+            console.error("Detalle error Supabase al registrar venta:", saleErr);
+            alert("Error registrando la venta en la base de datos: " + errorMsg);
           }
         } else {
           alert("Stock insuficiente o datos inválidos.");
