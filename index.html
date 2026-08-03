@@ -1652,8 +1652,8 @@
             showToast(`¡Venta procesada! +${formatMXN(total)}`, 'fa-cash-register');
           } else {
             const errorMsg = saleErr.message || "Error desconocido";
-            console.error("Detalle error Supabase al registrar venta:", saleErr);
-            alert("Error registrando la venta en la base de datos: " + errorMsg);
+            alert("Error real de Supabase: " + saleErr?.message);
+            console.error("Detalle del error de venta:", saleErr);
           }
         } else {
           alert("Stock insuficiente o datos inválidos.");
